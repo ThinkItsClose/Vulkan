@@ -1,30 +1,77 @@
 #include "Renderer.h"
 
+const char* appName = "Vulkan";
+
 Renderer::Renderer() {
+	_InitWindow();
 	_InitInstance();
 	_InitDevice();
+
+	_CheckValidationLayerSupport();
+
+	_MainLoop();
 }
 
 Renderer::~Renderer() {
 	_DeconstructDevice();
 	_DeconstructInstance();
+	_DeconstructWindow();
+}
+
+void Renderer::_InitWindow() {
+	glfwInit();
+
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+	window = glfwCreateWindow(WIDTH, HEIGHT, appName, nullptr, nullptr);
+}
+
+void Renderer::_DeconstructWindow() {
+	glfwDestroyWindow(window);
+	glfwTerminate();
+}
+
+void Renderer::_MainLoop() {
+	while (!glfwWindowShouldClose(window)) {
+		glfwPollEvents();
+	}
 }
 
 void Renderer::_InitInstance() {
+	// First check to see if validation layers are required and supported
+	if (enableValidationLayers && !_CheckValidationLayerSupport()) {
+		std::cout << "ERROR::Renderer::InitInstance::ValidationLayersRequestedButNotSupported" << std::endl;
+	}
+
 	VkApplicationInfo application_info = {};
 	application_info.sType					= VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	application_info.apiVersion				= VK_MAKE_VERSION(1, 0, 3);
-	application_info.applicationVersion		= VK_MAKE_VERSION(0, 1, 0);
-	application_info.pApplicationName		= "Vulkan tutorial";
-	application_info.engineVersion			= VK_MAKE_VERSION(0, 1, 0);
+	application_info.applicationVersion		= VK_MAKE_VERSION(1, 0, 0);
+	application_info.pApplicationName		= appName;
+	application_info.engineVersion			= VK_MAKE_VERSION(1, 0, 0);
 	application_info.pEngineName			= "Geton Engine";
 
-	VkInstanceCreateInfo instance_create_info{};
-	instance_create_info.sType				= VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instance_create_info.pApplicationInfo	= &application_info;
+
+	uint32_t glfwExtensionCount = 0;
+	const char** glfwExtensions;
+	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	VkInstanceCreateInfo instance_create_info {};
+	instance_create_info.sType						= VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	instance_create_info.pApplicationInfo			= &application_info;
+	instance_create_info.enabledExtensionCount		= glfwExtensionCount;
+	instance_create_info.ppEnabledExtensionNames	= glfwExtensions;
+	// If validation layers are enabled then add them to the instance
+	if (enableValidationLayers) {
+		instance_create_info.enabledLayerCount		= static_cast<uint32_t>(_requestedLayers.size());
+		instance_create_info.ppEnabledLayerNames	= _requestedLayers.data();
+	} else {
+		instance_create_info.enabledLayerCount		= 0;
+	}
+
 	
 	if (vkCreateInstance(&instance_create_info, nullptr, &_instance) != VK_SUCCESS) {
-		std::cout << "Error creating a vulkan instance" << std::endl;
+		std::cout << "ERROR::Renderer::InitInstance::CreateInstance" << std::endl;
 		exit(-1);
 	}
 }
@@ -36,77 +83,48 @@ void Renderer::_DeconstructInstance() {
 }
 
 void Renderer::_InitDevice() {
-
-	// Get number of all physical devices
-	uint32_t gpu_count;
-	if (vkEnumeratePhysicalDevices(_instance, &gpu_count, nullptr) != VK_SUCCESS) {
-		std::cout << "ERROR::RENDERER::INITDEVICE::EnumeratePhysicalDevices::0" << std::endl;
-		exit(-1);
-	}
-
-	// Get list of all physical devices
-	std::vector<VkPhysicalDevice> gpu_list(gpu_count);
-	if (vkEnumeratePhysicalDevices(_instance, &gpu_count, gpu_list.data()) != VK_SUCCESS) {
-		std::cout << "ERROR::RENDERER::INITDEVICE::EnumeratePhysicalDevices::1" << std::endl;
-		exit(-1);
-	}
-	
-	// If there are no physical devices then quit
-	if (!gpu_count) {
-		std::cout << "ERROR::RENDERER::INITDEVICE::GPUCOUNT::ZeroDevices" << std::endl;
-		exit(-1);
-	}
-
-	// Assume gpu#0 is the gpu we want to use
-	uint32_t deviceIndex = 0;
-	_gpu = gpu_list[deviceIndex];
-
-	// Just for debug print out the device name
-	VkPhysicalDeviceProperties physical_device_properties;
-	vkGetPhysicalDeviceProperties(_gpu, &physical_device_properties);
-	std::cout << "Using physical device " << deviceIndex << " ( " << physical_device_properties.deviceName << " )" << std::endl;
-
-	// Get the amount of familys in the GPU
-	uint32_t family_count = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(_gpu, &family_count, nullptr);
-	std::vector<VkQueueFamilyProperties> family_property_list(family_count);
-	vkGetPhysicalDeviceQueueFamilyProperties(_gpu, &family_count, family_property_list.data());
-
-	// Find which family supports the graphics bit
-	bool foundGraphicsBit = false;
-	for (uint32_t i = 0; i < family_count; i++) {
-		if (family_property_list[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			foundGraphicsBit = true;
-			_graphics_family_index = i;
-		}
-	}
-
-	if (!foundGraphicsBit) {
-		std::cout << "ERROR::RENDERER::INITDEVICE::GraphicsBitNotFound" << std::endl;
-		exit(-1);
-	}
-
-	float queue_prioroties[]{ 1.0f };
-
-	VkDeviceQueueCreateInfo device_queue_create_info = {};
-	device_queue_create_info.sType				= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	device_queue_create_info.queueFamilyIndex	= _graphics_family_index;
-	device_queue_create_info.queueCount			= 1;
-	device_queue_create_info.pQueuePriorities	= queue_prioroties;
-
-	VkDeviceCreateInfo device_create_info = {};
-	device_create_info.sType				= VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	device_create_info.queueCreateInfoCount = 1;
-	device_create_info.pQueueCreateInfos	= &device_queue_create_info;
-
-	if (vkCreateDevice(_gpu, &device_create_info, nullptr, &_device) != VK_SUCCESS) {
-		std::cout << "ERROR::RENDERER::INITDEVICE::CreateDevice" << std::endl;
-		exit(-1);
-	}
 }
 
 void Renderer::_DeconstructDevice() {
 	vkDestroyDevice(_device, nullptr);
 	_device = nullptr;
+}
+
+bool Renderer::_CheckValidationLayerSupport() {
+
+	// Get number of layers supported by the system
+	uint32_t layerCount;
+	if (vkEnumerateInstanceLayerProperties(&layerCount, nullptr) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::CheckValidationLayerSupport::EnumerateInstanceLayerProperties::0" << std::endl;
+		exit(-1);
+	}
+	
+	// Get the layers and add them to a vector
+	std::vector<VkLayerProperties> systemLayers(layerCount);
+	if (vkEnumerateInstanceLayerProperties(&layerCount, systemLayers.data()) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::CheckValidationLayerSupport::EnumerateInstanceLayerProperties::1" << std::endl;
+		exit(-1);
+	}
+
+	// Now do a search over the vector to see if the requested layers are availiable
+	_requestedLayers = {"VK_LAYER_KHRONOS_validation"};
+	for (uint32_t i = 0; i < _requestedLayers.size(); i++) {
+
+		bool layerFound = false;
+		for (uint32_t x = 0; x < layerCount; x++) {
+
+			if (!strcmp(_requestedLayers.at(i), systemLayers.at(x).layerName)) {
+				// The requested layer exists
+				// Continue to the next layer
+				layerFound = true;
+				break;
+			}
+		}
+
+		if (!layerFound) {
+			std::cout << "ERROR::Renderer::CheckValidationLayerSupport::RequestedLayersNotAvailiable::" << _requestedLayers.at(i) << std::endl;
+			return false;
+		}	
+	}
 }
 
