@@ -24,8 +24,7 @@ private:
 	GLFWwindow* window;
 
 	VkInstance _instance = nullptr;
-	VkDevice _device = nullptr;
-	VkPhysicalDevice _gpu = nullptr;
+	VkDebugUtilsMessengerEXT _DebugMessanger;
 
 	std::vector<const char*> _requestedLayers;
 
@@ -39,6 +38,12 @@ private:
 	void _DeconstructInstance();
 	void _DeconstructDevice();
 
+	// For validation layers and debugging
 	bool _CheckValidationLayerSupport();
+	std::vector<const char*> _GetRequiredExtensions();
+	static VKAPI_ATTR VkBool32 VKAPI_CALL _DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT*, void*);
+	void _InitDebugMessanger();
+	void _DeconstructDebugMessanger();
+
 };
 
