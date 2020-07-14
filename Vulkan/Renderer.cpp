@@ -16,11 +16,23 @@ Renderer::Renderer() {
 	_CreateRenderPass();
 	_CreateGraphicsPipeline();
 	_CreateFramebuffers();
-
+	_CreateCommandPool();
+	_CreateCommandBuffers();
+	_CreateSyncObjects();
+	
 	_MainLoop();
 }
 
 Renderer::~Renderer() {
+	// Cleanup syncronisation objects
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroySemaphore(_device, _renderFinishedSemaphores[i], nullptr);
+		vkDestroySemaphore(_device, _imageAvailableSemaphores[i], nullptr);
+		vkDestroyFence(_device, _inFlightFences[i], nullptr);
+	}
+
+	// Cleanup the command pool
+	vkDestroyCommandPool(_device, _commandPool, nullptr);
 
 	// Destroy all the framebuffers
 	for (auto framebuffer : _framebuffers) {
@@ -236,7 +248,7 @@ int Renderer::_RatePhysicalDevice(VkPhysicalDevice device) {
 	bool deviceExtensionsSupported = _CheckDeviceExtensionSupport(device);
 
 	// The indices of the required queue families are now in 'indices'
-	QueueFamilyIndices indices = _FindQueueFamilys(device);
+	QueueFamilyIndices indices = _FindQueueFamilies(device);
 
 	// Get the capabilities of the swapchain in the device
 	// Only do this if it is known that the device extentions are supported (it contains the swapchain extension)
@@ -282,7 +294,7 @@ bool Renderer::_CheckDeviceExtensionSupport(VkPhysicalDevice device) {
 }
 
 // Returns a struct containing the indices of certain queue families
-QueueFamilyIndices Renderer::_FindQueueFamilys(VkPhysicalDevice device) {
+QueueFamilyIndices Renderer::_FindQueueFamilies(VkPhysicalDevice device) {
 	QueueFamilyIndices indices;
 
 	// Get the number of queue families the device supports 
@@ -371,7 +383,7 @@ PhysicalDeviceSurface Renderer::_GetSwapChainCapabilities(VkPhysicalDevice devic
 void Renderer::_InitDevice() {
 	// Initalisation of the logical device
 	// Get the families supported by the device
-	QueueFamilyIndices indices = _FindQueueFamilys(_physicalDevice);
+	QueueFamilyIndices indices = _FindQueueFamilies(_physicalDevice);
 
 	// Create a unique list of the queue family's indices
 	std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
@@ -480,7 +492,7 @@ void Renderer::_InitSwapChain() {
 	swap_chain_create_info.imageUsage		= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	// Get the indices of the graphics family and the present family
-	QueueFamilyIndices indices = _FindQueueFamilys(_physicalDevice);
+	QueueFamilyIndices indices = _FindQueueFamilies(_physicalDevice);
 	uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
 
 	// If they are not in the same family then allow the images to be used across multiple familys
@@ -630,12 +642,22 @@ void Renderer::_CreateRenderPass() {
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentRef;
 
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
 	VkRenderPassCreateInfo render_pass_create_info{};
 	render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	render_pass_create_info.attachmentCount = 1;
 	render_pass_create_info.pAttachments = &colorAttachment;
 	render_pass_create_info.subpassCount = 1;
 	render_pass_create_info.pSubpasses = &subpass;
+	render_pass_create_info.dependencyCount = 1;
+	render_pass_create_info.pDependencies = &dependency;
 
 	if (vkCreateRenderPass(_device, &render_pass_create_info, nullptr, &_renderPass) != VK_SUCCESS) {
 		std::cout << "ERROR::Renderer::CreateRenderPass::CreateRenderPass" << std::endl;
@@ -828,9 +850,156 @@ void Renderer::_CreateFramebuffers() {
 	}
 }
 
-void Renderer::_MainLoop() {
-	while (!glfwWindowShouldClose(_window)) {
-		glfwPollEvents();
+void Renderer::_CreateCommandPool() {
+
+	QueueFamilyIndices queueFamilyIndices = _FindQueueFamilies(_physicalDevice);
+
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+	poolInfo.flags = 0; // Optional
+
+	if (vkCreateCommandPool(_device, &poolInfo, nullptr, &_commandPool) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::CreateCommandPool::CreateCommandPool" << std::endl;
+		exit(-1);
+	}
+
+}
+
+void Renderer::_CreateCommandBuffers() {
+	
+	// Resize the command buffer vector to the number of framebuffers
+	_commandBuffers.resize(_framebuffers.size());
+
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = _commandPool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = (uint32_t)_commandBuffers.size();
+
+	if (vkAllocateCommandBuffers(_device, &allocInfo, _commandBuffers.data()) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::CreateCommandBuffers::AllocateCommandBuffers" << std::endl;
+		exit(-1);
+	}
+
+	for (size_t i = 0; i < _commandBuffers.size(); i++) {
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = 0; // Optional
+		beginInfo.pInheritanceInfo = nullptr; // Optional
+
+		if (vkBeginCommandBuffer(_commandBuffers[i], &beginInfo) != VK_SUCCESS) {
+			std::cout << "ERROR::Renderer::CreateCommandBuffers::BeginCommandBuffer" << std::endl;
+			exit(-1);
+		}
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = _renderPass;
+		renderPassInfo.framebuffer = _framebuffers[i];
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = _swapChainExtent;
+
+		VkClearValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+		renderPassInfo.clearValueCount = 1;
+		renderPassInfo.pClearValues = &clearColor;
+
+		vkCmdBeginRenderPass(_commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+			vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+
+			vkCmdDraw(_commandBuffers[i], 3, 1, 0, 0);
+
+		vkCmdEndRenderPass(_commandBuffers[i]);
+
+		if (vkEndCommandBuffer(_commandBuffers[i]) != VK_SUCCESS) {
+			std::cout << "ERROR::Renderer::CreateCommandBuffers::EndCommandBuffer" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
+void Renderer::_CreateSyncObjects() {
+	_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	_imagesInFlight.resize(_swapChainImages.size(), VK_NULL_HANDLE);
+
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		if (vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_imageAvailableSemaphores[i]) != VK_SUCCESS ||
+			vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_renderFinishedSemaphores[i]) != VK_SUCCESS ||
+			vkCreateFence(_device, &fenceInfo, nullptr, &_inFlightFences[i]) != VK_SUCCESS) {
+
+			std::cout << "ERROR::Renderer::CreateSemaphores::CreateSemaphore" << std::endl;
+			exit(-1);
+		}
+	}
+}
+
+void Renderer::_MainLoop() {
+	while (!glfwWindowShouldClose(_window)) {
+		glfwPollEvents();
+		_DrawFrame();
+	}
+
+	// Wait for async operations to finish
+	vkDeviceWaitIdle(_device);
+}
+
+void Renderer::_DrawFrame() {
+	vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(_device, _swapChain, UINT64_MAX, _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	// Check if a previous frame is using this image (i.e. there is its fence to wait on)
+	if (_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+		vkWaitForFences(_device, 1, &_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+	}
+	// Mark the image as now being in use by this frame
+	_imagesInFlight[imageIndex] = _inFlightFences[_currentFrame];
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	VkSemaphore waitSemaphores[] = { _imageAvailableSemaphores[_currentFrame] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_commandBuffers[imageIndex];
+
+	VkSemaphore signalSemaphores[] = { _renderFinishedSemaphores[_currentFrame] };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	vkResetFences(_device, 1, &_inFlightFences[_currentFrame]);
+	if (vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _inFlightFences[_currentFrame]) != VK_SUCCESS) {
+		throw std::runtime_error("failed to submit draw command buffer!");
+	}
+
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapChains[] = { _swapChain };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr; // Optional
+
+	vkQueuePresentKHR(_presentQueue, &presentInfo);
+
+	_currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}

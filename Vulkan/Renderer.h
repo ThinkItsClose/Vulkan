@@ -53,6 +53,17 @@ private:
 	// Framebuffer members
 	std::vector<VkFramebuffer> _framebuffers;
 
+	// Commandbuffer stuff
+	VkCommandPool _commandPool;
+	std::vector<VkCommandBuffer> _commandBuffers;
+
+	// For drawing frames
+	std::vector<VkSemaphore> _imageAvailableSemaphores;
+	std::vector<VkSemaphore> _renderFinishedSemaphores;
+	std::vector<VkFence> _inFlightFences;
+	std::vector<VkFence> _imagesInFlight;
+	const int MAX_FRAMES_IN_FLIGHT = 2;
+	size_t _currentFrame = 0;
 
 	// Initialisation of Vulkan
 	void _InitWindow();
@@ -68,7 +79,7 @@ private:
 	bool _CheckValidationLayerSupport();
 	int _RatePhysicalDevice(VkPhysicalDevice);
 	bool _CheckDeviceExtensionSupport(VkPhysicalDevice);
-	QueueFamilyIndices _FindQueueFamilys(VkPhysicalDevice);
+	QueueFamilyIndices _FindQueueFamilies(VkPhysicalDevice);
 	PhysicalDeviceSurface _GetSwapChainCapabilities(VkPhysicalDevice);
 
 	// Swapchain initialisation methods
@@ -85,7 +96,15 @@ private:
 	// Framebuffer creation methods
 	void _CreateFramebuffers();
 
+	// Commandbuffer stuff
+	void _CreateCommandPool();
+	void _CreateCommandBuffers();
+
+	// Setup semaphores
+	void _CreateSyncObjects();
+
 	// Post initialisation
+	void _DrawFrame();
 	void _MainLoop();
 };
 
