@@ -5,21 +5,10 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
-#include <optional>
 #include <set>
 
-// Struct containting the indices of the queue families
-struct QueueFamilyIndices {
-
-	// Optional members containing the indices
-	std::optional<uint32_t> graphicsFamily;
-	std::optional<uint32_t> presentFamily;
-
-	// Check to see if the queue family is complete
-	bool IsComplete() {
-		return graphicsFamily.has_value() && presentFamily.has_value();
-	}
-};
+// Include structs
+#include "Renderer Structs.h"
 
 class Renderer {
 public:
@@ -35,6 +24,9 @@ private:
 	// Requested layers for debugging
 	std::vector<const char*> _requestedLayers = { "VK_LAYER_KHRONOS_validation" };
 	const bool _enableDebug = true;
+
+	// Required device extensions
+	std::vector<const char*> _requiredDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	
 	// All vulkan member attributes
 	VkInstance _instance = nullptr;
@@ -44,6 +36,13 @@ private:
 	VkDevice _device = nullptr;
 	VkQueue _graphicsQueue = nullptr;
 	VkQueue _presentQueue = nullptr;
+
+	// Swapchain members
+	VkSwapchainKHR _swapChain;
+	std::vector<VkImage> _swapChainImages;
+	VkFormat _swapChainFormat;
+	VkExtent2D _swapChainExtent;
+
 
 	// Initialisation of Vulkan
 	void _InitWindow();
@@ -56,8 +55,16 @@ private:
 	// Debugging, instance and device creation
 	std::vector<const char*> _GetRequiredExtensions();
 	bool _CheckValidationLayerSupport();
-	int _RatePhysicalDevice(VkPhysicalDevice device);
-	QueueFamilyIndices _FindQueueFamilys(VkPhysicalDevice device);
+	int _RatePhysicalDevice(VkPhysicalDevice);
+	bool _CheckDeviceExtensionSupport(VkPhysicalDevice);
+	QueueFamilyIndices _FindQueueFamilys(VkPhysicalDevice);
+	PhysicalDeviceSurface _GetSwapChainCapabilities(VkPhysicalDevice);
+
+	// Swapchain initialisation methods
+	void _InitSwapChain();
+	VkSurfaceFormatKHR _GetSurfaceFormat(std::vector<VkSurfaceFormatKHR>&);
+	VkPresentModeKHR _GetPresentMode(std::vector<VkPresentModeKHR>&);
+	VkExtent2D _GetSwapExtent(VkSurfaceCapabilitiesKHR&);
 
 	// Post initialisation
 	void _MainLoop();
