@@ -35,7 +35,9 @@ private:
 
 	VkInstance _instance = nullptr;
 	VkPhysicalDevice _physicalDevice = nullptr;
+	VkDevice _device = nullptr;
 	VkDebugUtilsMessengerEXT _DebugMessanger;
+	VkQueue _graphicsQueue;
 
 	std::vector<const char*> _requestedLayers;
 
@@ -53,9 +55,11 @@ private:
 	void _InitDebugMessanger();
 	void _DeconstructDebugMessanger();
 
-	void _InitDevice();
+	void _InitPhysicalDevice();
 	int _RatePhysicalDevice(VkPhysicalDevice device);
 	void _DeconstructDevice();
+
+	void _InitDevice();
 
 	QueueFamilyIndices _FindQueueFamilys(VkPhysicalDevice device);
 

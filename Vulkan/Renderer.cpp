@@ -6,7 +6,9 @@ Renderer::Renderer() {
 	_InitWindow();
 	_InitInstance();
 	if (enableValidationLayers) { _InitDebugMessanger(); }
+	_InitPhysicalDevice();
 	_InitDevice();
+
 	_MainLoop();
 }
 
@@ -86,7 +88,7 @@ void Renderer::_DeconstructInstance() {
 	_instance = nullptr;
 }
 
-void Renderer::_InitDevice() {
+void Renderer::_InitPhysicalDevice() {
 	// First of all get the number of physical devices
 	uint32_t deviceCount;
 	if (vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr) != VK_SUCCESS) {
@@ -123,6 +125,9 @@ void Renderer::_InitDevice() {
 		std::cout << "ERROR::Renderer::InitDevice::NoDevicesFound" << std::endl;
 		exit(-1);
 	}
+
+	// If it is not assign it to the renderer attribute physical device
+	_physicalDevice = currentDevice;
 }
 
 int Renderer::_RatePhysicalDevice(VkPhysicalDevice device) {
@@ -137,8 +142,41 @@ int Renderer::_RatePhysicalDevice(VkPhysicalDevice device) {
 }
 
 void Renderer::_DeconstructDevice() {
-	//vkDestroyDevice(_device, nullptr);
-	//_device = nullptr;
+	vkDestroyDevice(_device, nullptr);
+	_device = nullptr;
+}
+
+void Renderer::_InitDevice() {
+	QueueFamilyIndices indices = _FindQueueFamilys(_physicalDevice);
+
+	float queuePriority = 1.0f;
+	VkDeviceQueueCreateInfo device_queue_create_info{};
+	device_queue_create_info.sType				= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	device_queue_create_info.queueFamilyIndex	= indices.graphicsFamily.value();
+	device_queue_create_info.queueCount			= 1;
+	device_queue_create_info.pQueuePriorities	= &queuePriority;
+
+	VkPhysicalDeviceFeatures physical_device_features{};
+
+	VkDeviceCreateInfo device_create_info{};
+	device_create_info.sType					= VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	device_create_info.pQueueCreateInfos		= &device_queue_create_info;
+	device_create_info.queueCreateInfoCount		= 1;
+	device_create_info.pEnabledFeatures			= &physical_device_features;
+	device_create_info.enabledExtensionCount	= 0;
+	if (enableValidationLayers) {
+		device_create_info.enabledLayerCount	= static_cast<uint32_t>(_requestedLayers.size());
+		device_create_info.ppEnabledLayerNames	= _requestedLayers.data();
+	} else {
+		device_create_info.enabledLayerCount	= 0;
+	}
+
+	if (vkCreateDevice(_physicalDevice, &device_create_info, nullptr, &_device) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::_InitLogicalDevice::vkCreateDevice" << std::endl;
+		exit(-1);
+	}
+
+	vkGetDeviceQueue(_device, indices.graphicsFamily.value(), 0, &_graphicsQueue);
 }
 
 QueueFamilyIndices Renderer::_FindQueueFamilys(VkPhysicalDevice device) {
