@@ -46,7 +46,12 @@ private:
 	std::vector<VkImageView> _swapChainImageViews;
 
 	// Graphics pipeline memebers
+	VkRenderPass _renderPass;
 	VkPipelineLayout _pipelineLayout;
+	VkPipeline _pipeline;
+
+	// Framebuffer members
+	std::vector<VkFramebuffer> _framebuffers;
 
 
 	// Initialisation of Vulkan
@@ -73,8 +78,12 @@ private:
 	VkExtent2D _GetSwapExtent(VkSurfaceCapabilitiesKHR&);
 
 	// Graphics pipeline
+	void _CreateRenderPass();
 	void _CreateGraphicsPipeline();
 	VkShaderModule _GetShaderModule(const std::vector<char>&);
+
+	// Framebuffer creation methods
+	void _CreateFramebuffers();
 
 	// Post initialisation
 	void _MainLoop();

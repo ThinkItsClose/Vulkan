@@ -13,14 +13,24 @@ Renderer::Renderer() {
 	_InitDevice();
 	_InitSwapChain();
 	_CreateImageViews();
+	_CreateRenderPass();
 	_CreateGraphicsPipeline();
+	_CreateFramebuffers();
 
 	_MainLoop();
 }
 
 Renderer::~Renderer() {
-	// Destory the pipeline layout
+
+	// Destroy all the framebuffers
+	for (auto framebuffer : _framebuffers) {
+		vkDestroyFramebuffer(_device, framebuffer, nullptr);
+	}
+
+	// Destory the pipeline, pipeline layout and the render pass objects
+	vkDestroyPipeline(_device, _pipeline, nullptr);
 	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+	vkDestroyRenderPass(_device, _renderPass, nullptr);
 
 	// Loop to destroy each image view from the vector member
 	for (auto& view : _swapChainImageViews) {
@@ -600,6 +610,39 @@ std::vector<char> ReadFile(const std::string& filename) {
 	return buffer;
 }
 
+void Renderer::_CreateRenderPass() {
+	VkAttachmentDescription colorAttachment{};
+	colorAttachment.format = _swapChainFormat;
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // For multisampling
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentRef{};
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	VkRenderPassCreateInfo render_pass_create_info{};
+	render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	render_pass_create_info.attachmentCount = 1;
+	render_pass_create_info.pAttachments = &colorAttachment;
+	render_pass_create_info.subpassCount = 1;
+	render_pass_create_info.pSubpasses = &subpass;
+
+	if (vkCreateRenderPass(_device, &render_pass_create_info, nullptr, &_renderPass) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::CreateRenderPass::CreateRenderPass" << std::endl;
+		exit(-1);
+	}
+}
+
 void Renderer::_CreateGraphicsPipeline() {
 
 	// Read the code from file
@@ -717,6 +760,27 @@ void Renderer::_CreateGraphicsPipeline() {
 		exit(-1);
 	}
 
+	VkGraphicsPipelineCreateInfo pipeline_create_info{};
+	pipeline_create_info.sType					= VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipeline_create_info.stageCount				= 2;
+	pipeline_create_info.pStages				= shaderStages;
+	pipeline_create_info.pVertexInputState		= &vertex_input_state_create_info;
+	pipeline_create_info.pInputAssemblyState	= &input_assembly_state_create_info;
+	pipeline_create_info.pViewportState			= &viewport_state_create_info;
+	pipeline_create_info.pRasterizationState	= &rasterizer_state_create_info;
+	pipeline_create_info.pMultisampleState		= &multisample_state_create_info;
+	pipeline_create_info.pDepthStencilState		= nullptr; // Optional
+	pipeline_create_info.pColorBlendState		= &color_blend_state_create_info;
+	pipeline_create_info.pDynamicState			= nullptr; // Optional
+	pipeline_create_info.layout					= _pipelineLayout;
+	pipeline_create_info.renderPass				= _renderPass;
+	pipeline_create_info.subpass				= 0;
+
+	if (vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &_pipeline) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::CreateGraphicsPipeline::CreateGraphicsPipelines" << std::endl;
+		exit(-1);
+	}
+
 	// Cleanup the shader modules
 	vkDestroyShaderModule(_device, fragShaderModule, nullptr);
 	vkDestroyShaderModule(_device, vertShaderModule, nullptr);
@@ -736,6 +800,32 @@ VkShaderModule Renderer::_GetShaderModule(const std::vector<char>& code) {
 	}
 
 	return module;
+}
+
+void Renderer::_CreateFramebuffers() {
+	// Resize the vector to hold all of the framebuffers
+	_framebuffers.resize(_swapChainImageViews.size());
+
+	// Itterate over the image views and create frame buffers from them
+	for (size_t i = 0; i < _swapChainImageViews.size(); i++) {
+		VkImageView attachments[] = {
+			_swapChainImageViews[i]
+		};
+
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = _renderPass;
+		framebufferInfo.attachmentCount = 1;
+		framebufferInfo.pAttachments = attachments;
+		framebufferInfo.width = _swapChainExtent.width;
+		framebufferInfo.height = _swapChainExtent.height;
+		framebufferInfo.layers = 1;
+
+		if (vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_framebuffers[i]) != VK_SUCCESS) {
+			std::cout << "ERROR::Renderer::CreateFramebuffers::CreateFramebuffer" << std::endl;
+			exit(-1);
+		}
+	}
 }
 
 void Renderer::_MainLoop() {
