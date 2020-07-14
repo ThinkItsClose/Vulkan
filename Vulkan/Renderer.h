@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <optional>
+#include <set>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -18,10 +19,11 @@ const bool enableValidationLayers = true;
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
 
 	// Check to see if the queue family is complete
 	bool IsComplete() {
-		return graphicsFamily.has_value();
+		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
 };
 
@@ -31,20 +33,23 @@ public:
 	~Renderer();
 
 private:
-	GLFWwindow* window;
+	GLFWwindow* _window;
 
 	VkInstance _instance = nullptr;
+	VkSurfaceKHR _surface = nullptr;
 	VkPhysicalDevice _physicalDevice = nullptr;
 	VkDevice _device = nullptr;
 	VkDebugUtilsMessengerEXT _DebugMessanger;
 	VkQueue _graphicsQueue;
+	VkQueue _presentQueue;
 
 	std::vector<const char*> _requestedLayers;
 
 	void _InitWindow();
 	void _InitInstance();
-
-	void _MainLoop();
+	
+	void _CreateSurface();
+	void _DesconstructSurface();
 
 	void _DeconstructWindow();
 	void _DeconstructInstance();
@@ -62,6 +67,8 @@ private:
 	void _InitDevice();
 
 	QueueFamilyIndices _FindQueueFamilys(VkPhysicalDevice device);
+
+	void _MainLoop();
 
 };
 

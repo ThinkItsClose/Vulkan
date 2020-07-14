@@ -6,6 +6,7 @@ Renderer::Renderer() {
 	_InitWindow();
 	_InitInstance();
 	if (enableValidationLayers) { _InitDebugMessanger(); }
+	_CreateSurface();
 	_InitPhysicalDevice();
 	_InitDevice();
 
@@ -17,6 +18,7 @@ Renderer::~Renderer() {
 	if (enableValidationLayers) { _DeconstructDebugMessanger(); }
 
 	_DeconstructDevice();
+	_DesconstructSurface();
 	_DeconstructInstance();
 	_DeconstructWindow();
 }
@@ -27,16 +29,16 @@ void Renderer::_InitWindow() {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-	window = glfwCreateWindow(WIDTH, HEIGHT, appName, nullptr, nullptr);
+	_window = glfwCreateWindow(WIDTH, HEIGHT, appName, nullptr, nullptr);
 }
 
 void Renderer::_DeconstructWindow() {
-	glfwDestroyWindow(window);
+	glfwDestroyWindow(_window);
 	glfwTerminate();
 }
 
 void Renderer::_MainLoop() {
-	while (!glfwWindowShouldClose(window)) {
+	while (!glfwWindowShouldClose(_window)) {
 		glfwPollEvents();
 	}
 }
@@ -80,6 +82,19 @@ void Renderer::_InitInstance() {
 		std::cout << "ERROR::Renderer::InitInstance::CreateInstance" << std::endl;
 		exit(-1);
 	}
+}
+
+void Renderer::_CreateSurface() {
+	// Create a window surface for the vulkan instance
+	if (glfwCreateWindowSurface(_instance, _window, nullptr, &_surface) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::CreateSurface::glfwCreateWindowSurface" << std::endl;
+		exit(-1);
+	}
+
+}
+
+void Renderer::_DesconstructSurface() {
+	vkDestroySurfaceKHR(_instance, _surface, nullptr);
 }
 
 void Renderer::_DeconstructInstance() {
@@ -149,19 +164,27 @@ void Renderer::_DeconstructDevice() {
 void Renderer::_InitDevice() {
 	QueueFamilyIndices indices = _FindQueueFamilys(_physicalDevice);
 
+	std::vector<VkDeviceQueueCreateInfo> device_queue_create_infos;
+	std::set<uint32_t> uniqueQueueFamilies = {
+											indices.graphicsFamily.value(),
+											indices.presentFamily.value() };
+
 	float queuePriority = 1.0f;
-	VkDeviceQueueCreateInfo device_queue_create_info{};
-	device_queue_create_info.sType				= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	device_queue_create_info.queueFamilyIndex	= indices.graphicsFamily.value();
-	device_queue_create_info.queueCount			= 1;
-	device_queue_create_info.pQueuePriorities	= &queuePriority;
+	for (uint32_t queueFamily : uniqueQueueFamilies) {
+		VkDeviceQueueCreateInfo device_queue_create_info{};
+		device_queue_create_info.sType				= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		device_queue_create_info.queueFamilyIndex	= queueFamily;
+		device_queue_create_info.queueCount			= 1;
+		device_queue_create_info.pQueuePriorities	= &queuePriority;
+
+		device_queue_create_infos.push_back(device_queue_create_info);
+	}
 
 	VkPhysicalDeviceFeatures physical_device_features{};
-
 	VkDeviceCreateInfo device_create_info{};
 	device_create_info.sType					= VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	device_create_info.pQueueCreateInfos		= &device_queue_create_info;
-	device_create_info.queueCreateInfoCount		= 1;
+	device_create_info.queueCreateInfoCount		= static_cast<uint32_t>(device_queue_create_infos.size());
+	device_create_info.pQueueCreateInfos		= device_queue_create_infos.data();
 	device_create_info.pEnabledFeatures			= &physical_device_features;
 	device_create_info.enabledExtensionCount	= 0;
 	if (enableValidationLayers) {
@@ -177,6 +200,7 @@ void Renderer::_InitDevice() {
 	}
 
 	vkGetDeviceQueue(_device, indices.graphicsFamily.value(), 0, &_graphicsQueue);
+	vkGetDeviceQueue(_device, indices.presentFamily.value(), 0, &_presentQueue);
 }
 
 QueueFamilyIndices Renderer::_FindQueueFamilys(VkPhysicalDevice device) {
@@ -192,6 +216,12 @@ QueueFamilyIndices Renderer::_FindQueueFamilys(VkPhysicalDevice device) {
 	for (auto& queueFamily : queueFamilies) {
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			indices.graphicsFamily = index;
+		}
+
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, index, _surface, &presentSupport);
+		if (presentSupport) {
+			indices.presentFamily = index;
 		}
 
 		if (indices.IsComplete()) {
