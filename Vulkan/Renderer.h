@@ -49,20 +49,15 @@ private:
 	void _InitInstance();
 	
 	void _CreateSurface();
-	void _DesconstructSurface();
 
-	void _DeconstructWindow();
-	void _DeconstructInstance();
 
 	bool _CheckValidationLayerSupport();
 	std::vector<const char*> _GetRequiredExtensions();
 	static VKAPI_ATTR VkBool32 VKAPI_CALL _DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT*, void*);
 	void _InitDebugMessanger();
-	void _DeconstructDebugMessanger();
 
 	void _InitPhysicalDevice();
 	int _RatePhysicalDevice(VkPhysicalDevice device);
-	void _DeconstructDevice();
 
 	void _InitDevice();
 

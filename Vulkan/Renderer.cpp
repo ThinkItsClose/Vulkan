@@ -14,34 +14,50 @@ Renderer::Renderer() {
 }
 
 Renderer::~Renderer() {
+	// First of all cleanup the device
+	vkDestroyDevice(_device, nullptr);
+	_device = nullptr;
 
-	if (enableValidationLayers) { _DeconstructDebugMessanger(); }
+	// If the validation layers have been enabled then cleanup the debug messanger
+	if (enableValidationLayers) {
+		// Validate the instance exists before accessing it
+		if (_instance == nullptr) {
+			std::cout << "ERROR::Renderer::Deconstructor::DeconstructDebugMessanger::InstanceIsNullPointer" << std::endl;
+			exit(-1);
+		}
 
-	_DeconstructDevice();
-	_DesconstructSurface();
-	_DeconstructInstance();
-	_DeconstructWindow();
-}
+		// Get a handle to the destroy debug messanger function
+		PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(_instance, "vkDestroyDebugUtilsMessengerEXT");
+		if (vkDestroyDebugUtilsMessengerEXT != nullptr) {
+			vkDestroyDebugUtilsMessengerEXT(_instance, _DebugMessanger, nullptr);
+		}
+		else {
+			std::cout << "ERROR::Renderer::Deconstructor::DeconstructDebugMessanger::InvalidFunctionPointer" << std::endl;
+			exit(-1);
+		}
+	}
 
-void Renderer::_InitWindow() {
-	glfwInit();
+	// Now cleanup the surface
+	vkDestroySurfaceKHR(_instance, _surface, nullptr);
 
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	// Cleanup the Vulkan instance
+	vkDestroyInstance(_instance, nullptr);
+	_instance = nullptr;
 
-	_window = glfwCreateWindow(WIDTH, HEIGHT, appName, nullptr, nullptr);
-}
-
-void Renderer::_DeconstructWindow() {
+	// Cleaup the window
 	glfwDestroyWindow(_window);
 	glfwTerminate();
 }
 
-void Renderer::_MainLoop() {
-	while (!glfwWindowShouldClose(_window)) {
-		glfwPollEvents();
-	}
+void Renderer::_InitWindow() {
+
+	// No window resize right now as changing viewport size is not being handled
+	glfwInit();
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	_window = glfwCreateWindow(WIDTH, HEIGHT, appName, nullptr, nullptr);
 }
+
 
 void Renderer::_InitInstance() {
 	// First check to see if validation layers are required and supported
@@ -56,12 +72,7 @@ void Renderer::_InitInstance() {
 	application_info.engineVersion			= VK_MAKE_VERSION(1, 0, 0);
 	application_info.pEngineName			= "Geton Engine";
 
-
-	uint32_t glfwExtensionCount = 0;
-	const char** glfwExtensions;
-	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-
+	// Get a list of all the required extensions
 	std::vector<const char*> extensions = _GetRequiredExtensions();
 	VkInstanceCreateInfo instance_create_info {};
 	instance_create_info.sType						= VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -76,12 +87,60 @@ void Renderer::_InitInstance() {
 		instance_create_info.enabledLayerCount		= 0;
 	}
 	
-
-	
 	if (vkCreateInstance(&instance_create_info, nullptr, &_instance) != VK_SUCCESS) {
 		std::cout << "ERROR::Renderer::InitInstance::CreateInstance" << std::endl;
 		exit(-1);
 	}
+}
+
+std::vector<const char*> Renderer::_GetRequiredExtensions() {
+
+	// Get the extensions needed to interface with GLFW
+	uint32_t glfwCount = 0;
+	const char** glfwExtensions;
+	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwCount);
+
+	// Create a vector with all of the extensions
+	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwCount);
+
+	// If validation layers are enabled add the debug messanger extension
+	if (enableValidationLayers) {
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+
+	return extensions;
+}
+
+void Renderer::_InitDebugMessanger() {
+	// Check validation layers have been enabled
+	if (!enableValidationLayers) return;
+
+	VkDebugUtilsMessengerCreateInfoEXT messanger_create_info{};
+	messanger_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	messanger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	messanger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	messanger_create_info.pfnUserCallback = _DebugCallback;
+	messanger_create_info.pUserData = nullptr; // Optional (void*) parameter to pass custom variables to the callback
+
+	// Since the function to set the 'debug messanger callback' is not loaded the address needs to be looked up
+	PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(_instance, "vkCreateDebugUtilsMessengerEXT");
+
+	// Now if the function was found then execute it
+	if (vkCreateDebugUtilsMessengerEXT != nullptr) {
+		vkCreateDebugUtilsMessengerEXT(_instance, &messanger_create_info, nullptr, &_DebugMessanger);
+	}
+	else {
+		std::cout << "ERROR::Renderer::InitDebugMessanger::InvalidFunctionPointer" << std::endl;
+		exit(-1);
+	}
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::_DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+	// For now just output the message
+	std::cerr << pCallbackData->pMessage << std::endl;
+
+	// Return VK_FALSE here because VK_TRUE throws a runtime error at the error
+	return VK_FALSE;
 }
 
 void Renderer::_CreateSurface() {
@@ -93,17 +152,8 @@ void Renderer::_CreateSurface() {
 
 }
 
-void Renderer::_DesconstructSurface() {
-	vkDestroySurfaceKHR(_instance, _surface, nullptr);
-}
-
-void Renderer::_DeconstructInstance() {
-	// Destroy vulkan intsance and point to null
-	vkDestroyInstance(_instance, nullptr);
-	_instance = nullptr;
-}
-
 void Renderer::_InitPhysicalDevice() {
+
 	// First of all get the number of physical devices
 	uint32_t deviceCount;
 	if (vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr) != VK_SUCCESS) {
@@ -135,41 +185,81 @@ void Renderer::_InitPhysicalDevice() {
 		}
 	}
 
-	// If the current device is still a nullptr then no device was found
+	// If the current device is still a nullptr then no suitable device was found
 	if (currentDevice == nullptr) {
-		std::cout << "ERROR::Renderer::InitDevice::NoDevicesFound" << std::endl;
+		std::cout << "ERROR::Renderer::InitDevice::NoSuitableDevicesFound" << std::endl;
 		exit(-1);
 	}
 
-	// If it is not assign it to the renderer attribute physical device
+	// If it is make it the current physical device
 	_physicalDevice = currentDevice;
 }
 
 int Renderer::_RatePhysicalDevice(VkPhysicalDevice device) {
+	
+	// The calls to get properties and features here can be used in the future to ensure that the vulkan device
+	// matches the requirements that the programs have, for now the only criteria is that they support certian queue families
 	VkPhysicalDeviceProperties properties;
 	VkPhysicalDeviceFeatures features;
 	vkGetPhysicalDeviceProperties(device, &properties);
 	vkGetPhysicalDeviceFeatures(device, &features);
 
+	// The indices of the required queue families are now in 'indices'
 	QueueFamilyIndices indices = _FindQueueFamilys(device);
 
 	return indices.IsComplete();
 }
 
-void Renderer::_DeconstructDevice() {
-	vkDestroyDevice(_device, nullptr);
-	_device = nullptr;
+// Returns a struct containing the indices of certain queue families
+QueueFamilyIndices Renderer::_FindQueueFamilys(VkPhysicalDevice device) {
+	QueueFamilyIndices indices;
+
+	// Get the number of queue families the device supports 
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	// Now get the queue family properties in an vector
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	// Check each queue family for the requirements
+	int index = 0;
+	for (auto& queueFamily : queueFamilies) {
+
+		// Check that the queue family supports graphics operations
+		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			indices.graphicsFamily = index;
+		}
+
+		// Check that the queue family supports presentation to a surface
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, index, _surface, &presentSupport);
+		if (presentSupport) {
+			indices.presentFamily = index;
+		}
+
+		// If all the criteria have been meet then exit
+		if (indices.IsComplete()) {
+			break;
+		}
+
+		index++;
+	}
+
+	return indices;
 }
 
 void Renderer::_InitDevice() {
+	// Initalisation of the logical device
+	// Get the families supported by the device
 	QueueFamilyIndices indices = _FindQueueFamilys(_physicalDevice);
 
-	std::vector<VkDeviceQueueCreateInfo> device_queue_create_infos;
-	std::set<uint32_t> uniqueQueueFamilies = {
-											indices.graphicsFamily.value(),
-											indices.presentFamily.value() };
+	// Create a unique list of the queue family's indices
+	std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
 
+	// Create a vector of structs to add to the device create info struct
 	float queuePriority = 1.0f;
+	std::vector<VkDeviceQueueCreateInfo> device_queue_create_infos;
 	for (uint32_t queueFamily : uniqueQueueFamilies) {
 		VkDeviceQueueCreateInfo device_queue_create_info{};
 		device_queue_create_info.sType				= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -180,6 +270,7 @@ void Renderer::_InitDevice() {
 		device_queue_create_infos.push_back(device_queue_create_info);
 	}
 
+	// Ensure the logical device has the required families and validation layers
 	VkPhysicalDeviceFeatures physical_device_features{};
 	VkDeviceCreateInfo device_create_info{};
 	device_create_info.sType					= VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -199,39 +290,9 @@ void Renderer::_InitDevice() {
 		exit(-1);
 	}
 
+	// Get the handle of the queues created in the logical device
 	vkGetDeviceQueue(_device, indices.graphicsFamily.value(), 0, &_graphicsQueue);
 	vkGetDeviceQueue(_device, indices.presentFamily.value(), 0, &_presentQueue);
-}
-
-QueueFamilyIndices Renderer::_FindQueueFamilys(VkPhysicalDevice device) {
-	QueueFamilyIndices indices;
-
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-
-	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-
-	int index = 0;
-	for (auto& queueFamily : queueFamilies) {
-		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			indices.graphicsFamily = index;
-		}
-
-		VkBool32 presentSupport = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, index, _surface, &presentSupport);
-		if (presentSupport) {
-			indices.presentFamily = index;
-		}
-
-		if (indices.IsComplete()) {
-			break;
-		}
-
-		index++;
-	}
-
-	return indices;
 }
 
 bool Renderer::_CheckValidationLayerSupport() {
@@ -274,64 +335,8 @@ bool Renderer::_CheckValidationLayerSupport() {
 	return true;
 }
 
-std::vector<const char*> Renderer::_GetRequiredExtensions() {
-
-	uint32_t glfwCount = 0;
-	const char** glfwExtensions;
-	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwCount);
-
-	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwCount);
-
-	if (enableValidationLayers) {
-		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	}
-
-	return extensions;
-}
-
-VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::_DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
-
-	std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
-
-	return VK_FALSE;
-}
-
-void Renderer::_InitDebugMessanger() {
-	if (!enableValidationLayers) return;
-
-	VkDebugUtilsMessengerCreateInfoEXT messanger_create_info {};
-	messanger_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	messanger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	messanger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	messanger_create_info.pfnUserCallback = _DebugCallback;
-	messanger_create_info.pUserData = nullptr; // Optional (void*) parameter to pass custom variables to the callback
-
-	// Since the function to set the create the debug messanger is not loaded
-	// The address needs to be looked up
-	PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(_instance, "vkCreateDebugUtilsMessengerEXT");
-
-	// Now if the function was found then execute it
-	if (vkCreateDebugUtilsMessengerEXT != nullptr) {
-		vkCreateDebugUtilsMessengerEXT(_instance, &messanger_create_info, nullptr, &_DebugMessanger);
-	} else {
-		std::cout << "ERROR::Renderer::InitDebugMessanger::InvalidFunctionPointer" << std::endl;
-		exit(-1);
+void Renderer::_MainLoop() {
+	while (!glfwWindowShouldClose(_window)) {
+		glfwPollEvents();
 	}
 }
-
-void Renderer::_DeconstructDebugMessanger() {
-	// Validate the instance exists before accessing it
-	if (_instance == nullptr) {
-		std::cout << "ERROR::Renderer::DeconstructDebugMessanger::InstanceIsNullPointer" << std::endl;
-		exit(-1);
-	}
-
-	PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(_instance, "vkDestroyDebugUtilsMessengerEXT");
-	if (vkDestroyDebugUtilsMessengerEXT != nullptr) {
-		vkDestroyDebugUtilsMessengerEXT(_instance, _DebugMessanger, nullptr);
-	} else {
-		std::cout << "ERROR::Renderer::DeconstructDebugMessanger::InvalidFunctionPointer" << std::endl;
-		exit(-1);
-	}
-}
-
