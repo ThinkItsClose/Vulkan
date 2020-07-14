@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <set>
+#include <fstream>
 
 // Include structs
 #include "Renderer Structs.h"
@@ -42,6 +43,10 @@ private:
 	std::vector<VkImage> _swapChainImages;
 	VkFormat _swapChainFormat;
 	VkExtent2D _swapChainExtent;
+	std::vector<VkImageView> _swapChainImageViews;
+
+	// Graphics pipeline memebers
+	VkPipelineLayout _pipelineLayout;
 
 
 	// Initialisation of Vulkan
@@ -51,6 +56,7 @@ private:
 	void _CreateSurface();
 	void _InitPhysicalDevice();
 	void _InitDevice();
+	void _CreateImageViews();
 	
 	// Debugging, instance and device creation
 	std::vector<const char*> _GetRequiredExtensions();
@@ -65,6 +71,10 @@ private:
 	VkSurfaceFormatKHR _GetSurfaceFormat(std::vector<VkSurfaceFormatKHR>&);
 	VkPresentModeKHR _GetPresentMode(std::vector<VkPresentModeKHR>&);
 	VkExtent2D _GetSwapExtent(VkSurfaceCapabilitiesKHR&);
+
+	// Graphics pipeline
+	void _CreateGraphicsPipeline();
+	VkShaderModule _GetShaderModule(const std::vector<char>&);
 
 	// Post initialisation
 	void _MainLoop();
