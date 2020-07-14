@@ -5,12 +5,8 @@ const char* appName = "Vulkan";
 Renderer::Renderer() {
 	_InitWindow();
 	_InitInstance();
-	_InitDevice();
-
-	_CheckValidationLayerSupport();
 	if (enableValidationLayers) { _InitDebugMessanger(); }
-
-
+	_InitDevice();
 	_MainLoop();
 }
 
@@ -91,11 +87,83 @@ void Renderer::_DeconstructInstance() {
 }
 
 void Renderer::_InitDevice() {
+	// First of all get the number of physical devices
+	uint32_t deviceCount;
+	if (vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::InitDevice::vkEnumeratePhysicalDevices::0" << std::endl;
+		exit(-1);
+	}
+
+	if (!deviceCount) {
+		std::cout << "ERROR::Renderer::InitDevice::NoPhysicalDevicesFound" << std::endl;
+		exit(-1);
+	}
+	
+	// Now get a list of all physical devices
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	if (vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data()) != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::InitDevice::vkEnumeratePhysicalDevices::1" << std::endl;
+		exit(-1);
+	}
+
+	// Evaluate the suitability of each device
+	int maxRating = 0;
+	int rating;
+	VkPhysicalDevice currentDevice = nullptr;
+	for (VkPhysicalDevice& device : devices) {
+		rating = _RatePhysicalDevice(device);
+		if (rating > maxRating) {
+			currentDevice = device;
+			maxRating = rating;
+		}
+	}
+
+	// If the current device is still a nullptr then no device was found
+	if (currentDevice == nullptr) {
+		std::cout << "ERROR::Renderer::InitDevice::NoDevicesFound" << std::endl;
+		exit(-1);
+	}
+}
+
+int Renderer::_RatePhysicalDevice(VkPhysicalDevice device) {
+	VkPhysicalDeviceProperties properties;
+	VkPhysicalDeviceFeatures features;
+	vkGetPhysicalDeviceProperties(device, &properties);
+	vkGetPhysicalDeviceFeatures(device, &features);
+
+	QueueFamilyIndices indices = _FindQueueFamilys(device);
+
+	return indices.IsComplete();
 }
 
 void Renderer::_DeconstructDevice() {
 	//vkDestroyDevice(_device, nullptr);
 	//_device = nullptr;
+}
+
+QueueFamilyIndices Renderer::_FindQueueFamilys(VkPhysicalDevice device) {
+	QueueFamilyIndices indices;
+
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	int index = 0;
+	for (auto& queueFamily : queueFamilies) {
+		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			indices.graphicsFamily = index;
+		}
+
+		if (indices.IsComplete()) {
+			break;
+		}
+
+		index++;
+	}
+
+	return indices;
 }
 
 bool Renderer::_CheckValidationLayerSupport() {
