@@ -5,7 +5,9 @@ const char* appName = "Vulkan";
 Renderer::Renderer() {
 	_InitWindow();
 	_InitInstance();
-	if (enableValidationLayers) { _InitDebugMessanger(); }
+	if (_enableDebug) {
+		_InitDebugMessanger();
+	}
 	_CreateSurface();
 	_InitPhysicalDevice();
 	_InitDevice();
@@ -19,7 +21,7 @@ Renderer::~Renderer() {
 	_device = nullptr;
 
 	// If the validation layers have been enabled then cleanup the debug messanger
-	if (enableValidationLayers) {
+	if (_enableDebug) {
 		// Validate the instance exists before accessing it
 		if (_instance == nullptr) {
 			std::cout << "ERROR::Renderer::Deconstructor::DeconstructDebugMessanger::InstanceIsNullPointer" << std::endl;
@@ -55,13 +57,13 @@ void Renderer::_InitWindow() {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	_window = glfwCreateWindow(WIDTH, HEIGHT, appName, nullptr, nullptr);
+	_window = glfwCreateWindow(_width, _height, appName, nullptr, nullptr);
 }
 
 
 void Renderer::_InitInstance() {
 	// First check to see if validation layers are required and supported
-	if (enableValidationLayers && !_CheckValidationLayerSupport()) {
+	if (_enableDebug && !_CheckValidationLayerSupport()) {
 		std::cout << "ERROR::Renderer::InitInstance::ValidationLayersRequestedButNotSupported" << std::endl;
 	}
 
@@ -80,7 +82,7 @@ void Renderer::_InitInstance() {
 	instance_create_info.enabledExtensionCount		= static_cast<uint32_t>(extensions.size());
 	instance_create_info.ppEnabledExtensionNames	= extensions.data();
 	// If validation layers are enabled then add them to the instance
-	if (enableValidationLayers) {
+	if (_enableDebug) {
 		instance_create_info.enabledLayerCount		= static_cast<uint32_t>(_requestedLayers.size());
 		instance_create_info.ppEnabledLayerNames	= _requestedLayers.data();
 	} else {
@@ -104,7 +106,7 @@ std::vector<const char*> Renderer::_GetRequiredExtensions() {
 	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwCount);
 
 	// If validation layers are enabled add the debug messanger extension
-	if (enableValidationLayers) {
+	if (_enableDebug) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 
@@ -113,7 +115,7 @@ std::vector<const char*> Renderer::_GetRequiredExtensions() {
 
 void Renderer::_InitDebugMessanger() {
 	// Check validation layers have been enabled
-	if (!enableValidationLayers) return;
+	if (!_enableDebug) return;
 
 	VkDebugUtilsMessengerCreateInfoEXT messanger_create_info{};
 	messanger_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -135,7 +137,9 @@ void Renderer::_InitDebugMessanger() {
 	}
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::_DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+// Debug Callback is not a member of the class right now to keep the header clean
+// Private members can be passed through in the (void*) parameter if it is required
+VKAPI_ATTR VkBool32 VKAPI_CALL _DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
 	// For now just output the message
 	std::cerr << pCallbackData->pMessage << std::endl;
 
@@ -278,7 +282,7 @@ void Renderer::_InitDevice() {
 	device_create_info.pQueueCreateInfos		= device_queue_create_infos.data();
 	device_create_info.pEnabledFeatures			= &physical_device_features;
 	device_create_info.enabledExtensionCount	= 0;
-	if (enableValidationLayers) {
+	if (_enableDebug) {
 		device_create_info.enabledLayerCount	= static_cast<uint32_t>(_requestedLayers.size());
 		device_create_info.ppEnabledLayerNames	= _requestedLayers.data();
 	} else {
@@ -312,7 +316,6 @@ bool Renderer::_CheckValidationLayerSupport() {
 	}
 
 	// Now do a search over the vector to see if the requested layers are availiable
-	_requestedLayers = {"VK_LAYER_KHRONOS_validation"};
 	for (uint32_t i = 0; i < _requestedLayers.size(); i++) {
 
 		bool layerFound = false;

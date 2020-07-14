@@ -8,16 +8,10 @@
 #include <optional>
 #include <set>
 
-const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
-
-#ifdef NDEBUG
-const bool enableValidationLayers = false;
-#else
-const bool enableValidationLayers = true;
-#endif
-
+// Struct containting the indices of the queue families
 struct QueueFamilyIndices {
+
+	// Optional members containing the indices
 	std::optional<uint32_t> graphicsFamily;
 	std::optional<uint32_t> presentFamily;
 
@@ -33,37 +27,39 @@ public:
 	~Renderer();
 
 private:
+	// Pointer to the window and window width/height
 	GLFWwindow* _window;
+	uint32_t _width = 800;
+	uint32_t _height = 600;
 
+	// Requested layers for debugging
+	std::vector<const char*> _requestedLayers = { "VK_LAYER_KHRONOS_validation" };
+	const bool _enableDebug = true;
+	
+	// All vulkan member attributes
 	VkInstance _instance = nullptr;
+	VkDebugUtilsMessengerEXT _DebugMessanger = nullptr;
 	VkSurfaceKHR _surface = nullptr;
 	VkPhysicalDevice _physicalDevice = nullptr;
 	VkDevice _device = nullptr;
-	VkDebugUtilsMessengerEXT _DebugMessanger;
-	VkQueue _graphicsQueue;
-	VkQueue _presentQueue;
+	VkQueue _graphicsQueue = nullptr;
+	VkQueue _presentQueue = nullptr;
 
-	std::vector<const char*> _requestedLayers;
-
+	// Initialisation of Vulkan
 	void _InitWindow();
 	void _InitInstance();
-	
-	void _CreateSurface();
-
-
-	bool _CheckValidationLayerSupport();
-	std::vector<const char*> _GetRequiredExtensions();
-	static VKAPI_ATTR VkBool32 VKAPI_CALL _DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT*, void*);
 	void _InitDebugMessanger();
-
+	void _CreateSurface();
 	void _InitPhysicalDevice();
-	int _RatePhysicalDevice(VkPhysicalDevice device);
-
 	void _InitDevice();
-
+	
+	// Debugging, instance and device creation
+	std::vector<const char*> _GetRequiredExtensions();
+	bool _CheckValidationLayerSupport();
+	int _RatePhysicalDevice(VkPhysicalDevice device);
 	QueueFamilyIndices _FindQueueFamilys(VkPhysicalDevice device);
 
+	// Post initialisation
 	void _MainLoop();
-
 };
 
