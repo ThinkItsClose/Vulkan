@@ -65,6 +65,10 @@ private:
 	const int _max_frames_in_flight = 2;
 	size_t _currentFrame = 0;
 
+	// This is used to handle when the window has been resized
+	bool _framebufferResize = false;
+	static void _WindowResized(GLFWwindow*, int, int);
+
 	// Initialisation of Vulkan
 	void _InitWindow();
 	void _InitInstance();
@@ -84,6 +88,8 @@ private:
 
 	// Swapchain initialisation methods
 	void _InitSwapChain();
+	void _DeconstructSwapChain();
+	void _RecreateSwapChain();
 	VkSurfaceFormatKHR _GetSurfaceFormat(std::vector<VkSurfaceFormatKHR>&);
 	VkPresentModeKHR _GetPresentMode(std::vector<VkPresentModeKHR>&);
 	VkExtent2D _GetSwapExtent(VkSurfaceCapabilitiesKHR&);

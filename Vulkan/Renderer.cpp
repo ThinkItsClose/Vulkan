@@ -11,6 +11,7 @@ Renderer::Renderer() {
 	_CreateSurface();
 	_InitPhysicalDevice();
 	_InitDevice();
+
 	_InitSwapChain();
 	_CreateImageViews();
 	_CreateRenderPass();
@@ -18,12 +19,15 @@ Renderer::Renderer() {
 	_CreateFramebuffers();
 	_CreateCommandPool();
 	_CreateCommandBuffers();
+
 	_CreateSyncObjects();
 	
 	_MainLoop();
 }
 
 Renderer::~Renderer() {
+	_DeconstructSwapChain();
+
 	// Cleanup syncronisation objects
 	for (size_t i = 0; i < _max_frames_in_flight; i++) {
 		vkDestroySemaphore(_device, _renderFinishedSemaphores[i], nullptr);
@@ -33,24 +37,6 @@ Renderer::~Renderer() {
 
 	// Cleanup the command pool
 	vkDestroyCommandPool(_device, _commandPool, nullptr);
-
-	// Destroy all the framebuffers
-	for (auto framebuffer : _framebuffers) {
-		vkDestroyFramebuffer(_device, framebuffer, nullptr);
-	}
-
-	// Destory the pipeline, pipeline layout and the render pass objects
-	vkDestroyPipeline(_device, _pipeline, nullptr);
-	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
-	vkDestroyRenderPass(_device, _renderPass, nullptr);
-
-	// Loop to destroy each image view from the vector member
-	for (auto& view : _swapChainImageViews) {
-		vkDestroyImageView(_device, view, nullptr);
-	}
-
-	// Cleaup the current swapchain
-	vkDestroySwapchainKHR(_device, _swapChain, nullptr);
 
 	// Cleanup the device
 	vkDestroyDevice(_device, nullptr);
@@ -87,13 +73,22 @@ Renderer::~Renderer() {
 	glfwTerminate();
 }
 
-void Renderer::_InitWindow() {
+// Notify the rest of the program when the framebuffer size has changed
+void Renderer::_WindowResized(GLFWwindow* window, int width, int height) {
 
-	// No window resize right now as changing viewport size is not being handled
+	// Need to aquire pointer to class as this is a static member
+	Renderer* renderer = (Renderer*)glfwGetWindowUserPointer(window);
+	renderer->_framebufferResize = true;
+}
+
+void Renderer::_InitWindow() {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	_window = glfwCreateWindow(_width, _height, appName, nullptr, nullptr);
+
+	// Set the pointer to the current class and set the window size change callback
+	glfwSetWindowUserPointer(_window, this);
+	glfwSetFramebufferSizeCallback(_window, _WindowResized);
 }
 
 
@@ -526,6 +521,54 @@ void Renderer::_InitSwapChain() {
 
 }
 
+void Renderer::_DeconstructSwapChain() {
+	// Destroy all the framebuffers
+	for (auto framebuffer : _framebuffers) {
+		vkDestroyFramebuffer(_device, framebuffer, nullptr);
+	}
+
+	vkFreeCommandBuffers(_device, _commandPool, static_cast<uint32_t>(_commandBuffers.size()), _commandBuffers.data());
+
+	// Destory the pipeline, pipeline layout and the render pass objects
+	vkDestroyPipeline(_device, _pipeline, nullptr);
+	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+	vkDestroyRenderPass(_device, _renderPass, nullptr);
+
+	// Loop to destroy each image view from the vector member
+	for (auto& view : _swapChainImageViews) {
+		vkDestroyImageView(_device, view, nullptr);
+	}
+
+	// Cleaup the current swapchain
+	vkDestroySwapchainKHR(_device, _swapChain, nullptr);
+}
+
+void Renderer::_RecreateSwapChain() {
+	// If window is minimized then wait till it is in the foreground again
+	int width = 0;
+	int height = 0;
+	glfwGetFramebufferSize(_window, &width, &height);
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(_window, &width, &height);
+		glfwWaitEvents();
+	}
+
+	// Wait on all async operations to finish
+	vkDeviceWaitIdle(_device);
+
+	// Remove the old swapchain
+	_DeconstructSwapChain();
+
+	_InitSwapChain();
+	_CreateImageViews();
+	_CreateRenderPass();
+	_CreateGraphicsPipeline();
+	_CreateFramebuffers();
+	_CreateCommandPool();
+	_CreateCommandBuffers();
+
+}
+
 // Function to get the best format from a vector of surface formats
 VkSurfaceFormatKHR Renderer::_GetSurfaceFormat(std::vector<VkSurfaceFormatKHR>& avaliableFormats) {
 	// Prefer the combination of VK_FORMAT_B8G8R8A8_SRGB and VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
@@ -561,7 +604,13 @@ VkExtent2D Renderer::_GetSwapExtent(VkSurfaceCapabilitiesKHR& capabilities) {
 		return capabilities.currentExtent;
 	} else {
 		// Set swapchain extent to width and height of window
-		VkExtent2D extent = { _width, _height };
+		int width, height;
+		glfwGetFramebufferSize(_window, &width, &height);
+
+		VkExtent2D extent = {
+			static_cast<uint32_t>(width),
+			static_cast<uint32_t>(height)
+		};
 
 		// Ensure it is within the bounds of the swapchain
 		extent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, extent.width));
@@ -975,7 +1024,16 @@ void Renderer::_DrawFrame() {
 	// First aquire an image from the swap chain.
 	// UINT64_MAX for the timeout disables the timeout
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(_device, _swapChain, UINT64_MAX, _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(_device, _swapChain, UINT64_MAX, _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	// If the swap chain has become incompatible recreate it and skip this frame
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		_RecreateSwapChain();
+		return;
+	} else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		std::cout << "ERROR::Renderer::Mainloop::DrawFrame::FailedToAquireSwapChainImage" << std::endl;
+		exit(-1);
+	}
 
 	// Check if a frame is already using this image, if there is then wait on that fence
 	if (_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
@@ -1017,7 +1075,16 @@ void Renderer::_DrawFrame() {
 	present_info.pResults			= nullptr; // Takes an array of VkResult so success can be validated
 
 	// Submit the request to present an image to the swap chain
-	vkQueuePresentKHR(_presentQueue, &present_info);
+	result = vkQueuePresentKHR(_presentQueue, &present_info);
+
+	// If window resized then recreate the swapchain for the next frame to be drawn
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _framebufferResize) {
+		_framebufferResize = false;
+		_RecreateSwapChain();
+	} else if (result != VK_SUCCESS) {
+		std::cout << "ERROR::Renderer::Mainloop::DrawFrame::FailedToPresentSwapChainImage" << std::endl;
+		exit(-1);
+	}
 
 	// Increment and loop current frame back round
 	_currentFrame = (_currentFrame + 1) % _max_frames_in_flight;
