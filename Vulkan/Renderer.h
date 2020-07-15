@@ -57,12 +57,12 @@ private:
 	VkCommandPool _commandPool;
 	std::vector<VkCommandBuffer> _commandBuffers;
 
-	// For drawing frames
+	// For syncronising and having frames in flight
 	std::vector<VkSemaphore> _imageAvailableSemaphores;
 	std::vector<VkSemaphore> _renderFinishedSemaphores;
 	std::vector<VkFence> _inFlightFences;
 	std::vector<VkFence> _imagesInFlight;
-	const int MAX_FRAMES_IN_FLIGHT = 2;
+	const int _max_frames_in_flight = 2;
 	size_t _currentFrame = 0;
 
 	// Initialisation of Vulkan
