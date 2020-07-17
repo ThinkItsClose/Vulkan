@@ -9,6 +9,8 @@
 #include <fstream>
 #include <glm/glm.hpp>
 
+#include <numeric>
+
 // Include structs
 #include "Renderer Structs.h"
 
@@ -55,10 +57,12 @@ private:
 	std::vector<VkFramebuffer> _framebuffers;
 
 	// Commandbuffer stuff
-	VkBuffer _vertexBuffer;
-	VkDeviceMemory _vertexBufferMemory;
 	VkCommandPool _commandPool;
 	std::vector<VkCommandBuffer> _commandBuffers;
+	
+	// For vertex buffers 
+	VkDeviceMemory _vertexBufferMemory;
+	VkBuffer _vertexBuffer;
 
 	// For syncronising and having frames in flight
 	std::vector<VkSemaphore> _imageAvailableSemaphores;
@@ -111,6 +115,8 @@ private:
 	// Vertex buffers and helper functions
 	uint32_t _FindMemoryType(uint32_t, VkMemoryPropertyFlags);
 	void _CreateVertexBuffer();
+	void _CopyBuffer(VkBuffer, VkBuffer, VkDeviceSize);
+	void _CreateBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
 
 	// Commandbuffer stuff
 	void _CreateCommandPool();
@@ -120,7 +126,7 @@ private:
 	void _CreateSyncObjects();
 
 	// Post initialisation
-	void _DrawFrame();
 	void _MainLoop();
+	void _DrawFrame();
 };
 
