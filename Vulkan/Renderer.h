@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <set>
 #include <fstream>
+#include <glm/glm.hpp>
 
 // Include structs
 #include "Renderer Structs.h"
@@ -54,6 +55,8 @@ private:
 	std::vector<VkFramebuffer> _framebuffers;
 
 	// Commandbuffer stuff
+	VkBuffer _vertexBuffer;
+	VkDeviceMemory _vertexBufferMemory;
 	VkCommandPool _commandPool;
 	std::vector<VkCommandBuffer> _commandBuffers;
 
@@ -68,6 +71,9 @@ private:
 	// This is used to handle when the window has been resized
 	bool _framebufferResize = false;
 	static void _WindowResized(GLFWwindow*, int, int);
+
+	// Test vertices for now
+	const std::vector<Vertex> vertices = { {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}}, {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}}, {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}} };
 
 	// Initialisation of Vulkan
 	void _InitWindow();
@@ -101,6 +107,10 @@ private:
 
 	// Framebuffer creation methods
 	void _CreateFramebuffers();
+	
+	// Vertex buffers and helper functions
+	uint32_t _FindMemoryType(uint32_t, VkMemoryPropertyFlags);
+	void _CreateVertexBuffer();
 
 	// Commandbuffer stuff
 	void _CreateCommandPool();

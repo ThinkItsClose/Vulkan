@@ -18,6 +18,7 @@ Renderer::Renderer() {
 	_CreateGraphicsPipeline();
 	_CreateFramebuffers();
 	_CreateCommandPool();
+	_CreateVertexBuffer();
 	_CreateCommandBuffers();
 
 	_CreateSyncObjects();
@@ -27,6 +28,9 @@ Renderer::Renderer() {
 
 Renderer::~Renderer() {
 	_DeconstructSwapChain();
+
+	vkDestroyBuffer(_device, _vertexBuffer, nullptr);
+	vkFreeMemory(_device, _vertexBufferMemory, nullptr);
 
 	// Cleanup syncronisation objects
 	for (size_t i = 0; i < _max_frames_in_flight; i++) {
@@ -148,7 +152,7 @@ std::vector<const char*> Renderer::_GetRequiredExtensions() {
 // Private members can be passed through in the (void*) parameter if it is required
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
 	// For now just output the message
-	std::cerr << pCallbackData->pMessage << std::endl;
+	std::cerr << pCallbackData->pMessage << std::endl << std::endl;
 
 	// Return VK_FALSE here because VK_TRUE throws a runtime error at the error
 	return VK_FALSE;
@@ -729,28 +733,32 @@ void Renderer::_CreateGraphicsPipeline() {
 	fragCode.clear();
 
 	// Create structs to house the shader info
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
+	VkPipelineShaderStageCreateInfo vert_shader_stage_create_info{};
+	vert_shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vert_shader_stage_create_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vert_shader_stage_create_info.module = vertShaderModule;
+	vert_shader_stage_create_info.pName = "main";
 
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = fragShaderModule;
-	fragShaderStageInfo.pName = "main";
+	VkPipelineShaderStageCreateInfo frag_shader_stage_create_info{};
+	frag_shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	frag_shader_stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	frag_shader_stage_create_info.module = fragShaderModule;
+	frag_shader_stage_create_info.pName = "main";
 
 	// Combine the shader info structs into an array
-	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vert_shader_stage_create_info, frag_shader_stage_create_info };
 
 	// Now create all the structs that will be used to create the render pipeline
 	VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info{};
 	vertex_input_state_create_info.sType							= VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertex_input_state_create_info.vertexBindingDescriptionCount	= 0;
-	vertex_input_state_create_info.pVertexBindingDescriptions		= nullptr; // Optional
-	vertex_input_state_create_info.vertexAttributeDescriptionCount	= 0;
-	vertex_input_state_create_info.pVertexAttributeDescriptions		= nullptr; // Optional
+
+	// TODO: refactor this
+	auto bindingDescription = Vertex::getBindingDescription();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+	vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
+	vertex_input_state_create_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertex_input_state_create_info.pVertexBindingDescriptions = &bindingDescription;
+	vertex_input_state_create_info.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_state_create_info{};
 	input_assembly_state_create_info.sType					= VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -899,6 +907,51 @@ void Renderer::_CreateFramebuffers() {
 	}
 }
 
+uint32_t Renderer::_FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+	VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties(_physicalDevice, &memProperties);
+	
+
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	throw std::runtime_error("failed to find suitable memory type!");
+}
+
+void Renderer::_CreateVertexBuffer() {
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if (vkCreateBuffer(_device, &bufferInfo, nullptr, &_vertexBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create vertex buffer!");
+	}
+
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(_device, _vertexBuffer, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = _FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	if (vkAllocateMemory(_device, &allocInfo, nullptr, &_vertexBufferMemory) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate vertex buffer memory!");
+	}
+
+	vkBindBufferMemory(_device, _vertexBuffer, _vertexBufferMemory, 0);
+
+	void* data;
+	vkMapMemory(_device, _vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+	memcpy(data, vertices.data(), (size_t)bufferInfo.size);
+	vkUnmapMemory(_device, _vertexBufferMemory);
+}
+
 void Renderer::_CreateCommandPool() {
 
 	// Get the queue family indices of the current device
@@ -963,6 +1016,10 @@ void Renderer::_CreateCommandBuffers() {
 
 			// Bind the graphics pipeline
 			vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+
+			VkBuffer vertexBuffers[] = { _vertexBuffer };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
 			// Actually draw the vertices, finally
 			vkCmdDraw(_commandBuffers[i], 3, 1, 0, 0);
