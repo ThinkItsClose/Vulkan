@@ -60,3 +60,10 @@ struct Vertex {
 		return input_attribute_description;
 	}
 };
+
+// Temporary structure to hold the MVP matricies
+struct UniformBufferObject {
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
+};

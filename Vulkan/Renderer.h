@@ -7,9 +7,14 @@
 #include <algorithm>
 #include <set>
 #include <fstream>
-#include <glm/glm.hpp>
-
+#include <chrono>
 #include <numeric>
+
+// Maths headers
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 // Include structs
 #include "Renderer Structs.h"
@@ -50,6 +55,7 @@ private:
 
 	// Graphics pipeline memebers
 	VkRenderPass _renderPass;
+	VkDescriptorSetLayout _descriptorSetLayout;
 	VkPipelineLayout _pipelineLayout;
 	VkPipeline _pipeline;
 
@@ -63,6 +69,14 @@ private:
 	// For vertex buffers 
 	VkDeviceMemory _vertexBufferMemory;
 	VkBuffer _vertexBuffer;
+	VkDeviceMemory _indexBufferMemory;
+	VkBuffer _indexBuffer;
+	
+	// For UBO's and stuff
+	std::vector<VkBuffer> _uniformBuffers;
+	std::vector<VkDeviceMemory> _uniformBuffersMemory;
+	VkDescriptorPool _descriptorPool;
+	std::vector<VkDescriptorSet> _descriptorSets;
 
 	// For syncronising and having frames in flight
 	std::vector<VkSemaphore> _imageAvailableSemaphores;
@@ -77,7 +91,8 @@ private:
 	static void _WindowResized(GLFWwindow*, int, int);
 
 	// Test vertices for now
-	const std::vector<Vertex> vertices = { {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}}, {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}}, {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}} };
+	const std::vector<Vertex> _vertices = { {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}}, {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}, {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+	const std::vector<uint16_t> _indices = { 0, 1, 2, 2, 3, 0 }; // uint16_t since using less than 65535 vertices
 
 	// Initialisation of Vulkan
 	void _InitWindow();
@@ -104,6 +119,9 @@ private:
 	VkPresentModeKHR _GetPresentMode(std::vector<VkPresentModeKHR>&);
 	VkExtent2D _GetSwapExtent(VkSurfaceCapabilitiesKHR&);
 
+	// Descriptor sets are analogous to uniforms in opengl. I think
+	void _CreateDescriptorSetLayout();
+
 	// Graphics pipeline
 	void _CreateRenderPass();
 	void _CreateGraphicsPipeline();
@@ -115,8 +133,12 @@ private:
 	// Vertex buffers and helper functions
 	uint32_t _FindMemoryType(uint32_t, VkMemoryPropertyFlags);
 	void _CreateVertexBuffer();
+	void _CreateIndexBuffer();
 	void _CopyBuffer(VkBuffer, VkBuffer, VkDeviceSize);
 	void _CreateBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
+	void _CreateUniformBuffers();
+	void _CreateDescriptorPool();
+	void _CreateDescriptorSets();
 
 	// Commandbuffer stuff
 	void _CreateCommandPool();
@@ -128,5 +150,8 @@ private:
 	// Post initialisation
 	void _MainLoop();
 	void _DrawFrame();
+
+	// For updating shader uniforms
+	void _UpdateUniformBuffer(uint32_t);
 };
 
