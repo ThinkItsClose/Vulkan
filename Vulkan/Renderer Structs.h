@@ -34,6 +34,7 @@ struct PhysicalDeviceSurface {
 struct Vertex {
 	glm::vec2 position;
 	glm::vec3 colour;
+	glm::vec2 texCoord;
 
 	static VkVertexInputBindingDescription getBindingDescription() {
 		VkVertexInputBindingDescription input_binding_description{};
@@ -44,8 +45,8 @@ struct Vertex {
 		return input_binding_description;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 2> input_attribute_description{};
+	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 3> input_attribute_description{};
 
 		input_attribute_description[0].binding = 0;
 		input_attribute_description[0].location = 0;
@@ -56,6 +57,11 @@ struct Vertex {
 		input_attribute_description[1].location = 1;
 		input_attribute_description[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 		input_attribute_description[1].offset = offsetof(Vertex, colour);
+
+		input_attribute_description[2].binding = 0;
+		input_attribute_description[2].location = 2;
+		input_attribute_description[2].format = VK_FORMAT_R32G32_SFLOAT;
+		input_attribute_description[2].offset = offsetof(Vertex, texCoord);
 
 		return input_attribute_description;
 	}

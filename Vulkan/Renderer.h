@@ -91,8 +91,14 @@ private:
 	static void _WindowResized(GLFWwindow*, int, int);
 
 	// Test vertices for now
-	const std::vector<Vertex> _vertices = { {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}}, {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}, {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
-	const std::vector<uint16_t> _indices = { 0, 1, 2, 2, 3, 0 }; // uint16_t since using less than 65535 vertices
+	const std::vector<Vertex> _vertices = { {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}} };
+	const std::vector<uint16_t> _indices = { 0, 1, 2, 2, 3, 0 }; // uint16_t since using less than 65535 vertices when changing this the draw command index needs to be changed aswell ( i think )
+
+	// For textures
+	VkImage _textureImage;
+	VkDeviceMemory _textureImageMemory;
+	VkImageView _textureImageView;
+	VkSampler _textureSampler;
 
 	// Initialisation of Vulkan
 	void _InitWindow();
@@ -119,9 +125,6 @@ private:
 	VkPresentModeKHR _GetPresentMode(std::vector<VkPresentModeKHR>&);
 	VkExtent2D _GetSwapExtent(VkSurfaceCapabilitiesKHR&);
 
-	// Descriptor sets are analogous to uniforms in opengl. I think
-	void _CreateDescriptorSetLayout();
-
 	// Graphics pipeline
 	void _CreateRenderPass();
 	void _CreateGraphicsPipeline();
@@ -129,16 +132,30 @@ private:
 
 	// Framebuffer creation methods
 	void _CreateFramebuffers();
+
+	// For textures
+	void _CreateTextureImage();
+	void _CreateImage(uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags, VkMemoryPropertyFlags, VkImage&, VkDeviceMemory&);
+	void _TransitionImageLayout(VkImage, VkFormat, VkImageLayout, VkImageLayout);
+	void _CopyBufferToImage(VkBuffer, VkImage, uint32_t, uint32_t);
+	void _CreateTextureImageView();
+	VkImageView _CreateImageView(VkImage, VkFormat);
+	void _CreateTextureSampler();
 	
 	// Vertex buffers and helper functions
 	uint32_t _FindMemoryType(uint32_t, VkMemoryPropertyFlags);
 	void _CreateVertexBuffer();
 	void _CreateIndexBuffer();
+	VkCommandBuffer _BeginSingleTimeCommands();
+	void _EndSingleTimeCommands(VkCommandBuffer);
 	void _CopyBuffer(VkBuffer, VkBuffer, VkDeviceSize);
 	void _CreateBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
 	void _CreateUniformBuffers();
+
+	// Descriptor sets are analogous to uniforms in opengl. I think
 	void _CreateDescriptorPool();
 	void _CreateDescriptorSets();
+	void _CreateDescriptorSetLayout();
 
 	// Commandbuffer stuff
 	void _CreateCommandPool();
