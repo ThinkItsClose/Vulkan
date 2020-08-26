@@ -111,6 +111,7 @@ private:
 	// uint16_t since using less than 65535 vertices when changing this the draw command index needs to be changed aswell ( i think )
 
 	// For textures
+	uint32_t _mipmapLevels;
 	VkImage _textureImage;
 	VkDeviceMemory _textureImageMemory;
 	VkImageView _textureImageView;
@@ -162,12 +163,13 @@ private:
 
 	// For textures
 	void _CreateTextureImage();
-	void _CreateImage(uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags, VkMemoryPropertyFlags, VkImage&, VkDeviceMemory&);
-	void _TransitionImageLayout(VkImage, VkFormat, VkImageLayout, VkImageLayout);
+	void _CreateImage(uint32_t, uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags, VkMemoryPropertyFlags, VkImage&, VkDeviceMemory&);
+	void _TransitionImageLayout(VkImage, VkFormat, VkImageLayout, VkImageLayout, uint32_t);
 	void _CopyBufferToImage(VkBuffer, VkImage, uint32_t, uint32_t);
 	void _CreateTextureImageView();
-	VkImageView _CreateImageView(VkImage, VkFormat, VkImageAspectFlags);
+	VkImageView _CreateImageView(VkImage, VkFormat, VkImageAspectFlags, uint32_t);
 	void _CreateTextureSampler();
+	void _GenerateMipmaps(VkImage, VkFormat, int32_t, int32_t, uint32_t);
 	
 	// Vertex buffers and helper functions
 	uint32_t _FindMemoryType(uint32_t, VkMemoryPropertyFlags);
