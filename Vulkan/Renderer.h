@@ -13,6 +13,7 @@
 // Maths headers
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE			// GLM Automatically uses the OpenGL depth range of -1 to 1. Change this to 0 to 1 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -91,14 +92,34 @@ private:
 	static void _WindowResized(GLFWwindow*, int, int);
 
 	// Test vertices for now
-	const std::vector<Vertex> _vertices = { {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}} };
-	const std::vector<uint16_t> _indices = { 0, 1, 2, 2, 3, 0 }; // uint16_t since using less than 65535 vertices when changing this the draw command index needs to be changed aswell ( i think )
+	const std::vector<Vertex> _vertices = {
+	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+	};
+	const std::vector<uint16_t> _indices = {
+	0, 1, 2, 2, 3, 0,
+	4, 5, 6, 6, 7, 4
+	};
+	
+	// uint16_t since using less than 65535 vertices when changing this the draw command index needs to be changed aswell ( i think )
 
 	// For textures
 	VkImage _textureImage;
 	VkDeviceMemory _textureImageMemory;
 	VkImageView _textureImageView;
 	VkSampler _textureSampler;
+
+	// For depth attachment
+	VkImage _depthImage;
+	VkDeviceMemory _depthImageMemory;
+	VkImageView _depthImageView;
 
 	// Initialisation of Vulkan
 	void _InitWindow();
@@ -133,13 +154,19 @@ private:
 	// Framebuffer creation methods
 	void _CreateFramebuffers();
 
+	// For depth attachment
+	bool _HasStencilComponent(VkFormat);
+	VkFormat _FindDepthFormat();
+	VkFormat _FindSupportedFormat(const std::vector<VkFormat>&, VkImageTiling, VkFormatFeatureFlags);
+	void _CreateDepthResources();
+
 	// For textures
 	void _CreateTextureImage();
 	void _CreateImage(uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags, VkMemoryPropertyFlags, VkImage&, VkDeviceMemory&);
 	void _TransitionImageLayout(VkImage, VkFormat, VkImageLayout, VkImageLayout);
 	void _CopyBufferToImage(VkBuffer, VkImage, uint32_t, uint32_t);
 	void _CreateTextureImageView();
-	VkImageView _CreateImageView(VkImage, VkFormat);
+	VkImageView _CreateImageView(VkImage, VkFormat, VkImageAspectFlags);
 	void _CreateTextureSampler();
 	
 	// Vertex buffers and helper functions
