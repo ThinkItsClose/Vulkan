@@ -122,6 +122,11 @@ private:
 	VkDeviceMemory _depthImageMemory;
 	VkImageView _depthImageView;
 
+	VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+	VkImage _colorImage;
+	VkDeviceMemory _colorImageMemory;
+	VkImageView _colorImageView;
+
 	// Initialisation of Vulkan
 	void _InitWindow();
 	void _InitInstance();
@@ -161,9 +166,12 @@ private:
 	VkFormat _FindSupportedFormat(const std::vector<VkFormat>&, VkImageTiling, VkFormatFeatureFlags);
 	void _CreateDepthResources();
 
+	VkSampleCountFlagBits _GetMaxUsableSampleCount();
+	void _CreateColourResources();
+
 	// For textures
 	void _CreateTextureImage();
-	void _CreateImage(uint32_t, uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags, VkMemoryPropertyFlags, VkImage&, VkDeviceMemory&);
+	void _CreateImage(uint32_t, uint32_t, uint32_t, VkSampleCountFlagBits, VkFormat, VkImageTiling, VkImageUsageFlags, VkMemoryPropertyFlags, VkImage&, VkDeviceMemory&);
 	void _TransitionImageLayout(VkImage, VkFormat, VkImageLayout, VkImageLayout, uint32_t);
 	void _CopyBufferToImage(VkBuffer, VkImage, uint32_t, uint32_t);
 	void _CreateTextureImageView();
