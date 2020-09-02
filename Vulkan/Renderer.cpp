@@ -15,26 +15,22 @@ Renderer::Renderer() {
 	_CreateSurface();
 	_InitPhysicalDevice();
 	_InitDevice();
-
-	_InitSwapChain();
-	_CreateImageViews();
-	_CreateRenderPass();
-	_CreateDescriptorSetLayout();
-
-	_CreateGraphicsPipeline();
 	_CreateCommandPool();
-
-	_CreateColourResources();
-	_CreateDepthResources();
-	_CreateFramebuffers();
 
 	_CreateTextureImage();
 	_CreateTextureImageView();
 	_CreateTextureSampler();
-
 	_CreateVertexBuffer();
 	_CreateIndexBuffer();
+	_CreateDescriptorSetLayout();
 
+	_InitSwapChain();
+	_CreateImageViews();
+	_CreateRenderPass();
+	_CreateGraphicsPipeline();
+	_CreateColourResources();
+	_CreateDepthResources();
+	_CreateFramebuffers();
 	_CreateUniformBuffers();
 	_CreateDescriptorPool();
 	_CreateDescriptorSets();
